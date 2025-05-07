@@ -1,0 +1,43 @@
+{
+  "name": "@madulinux/react-datatable",
+  "version": "0.1.0",
+  "description": "Reusable DataTable component for React with sorting, paging, filter, and export.",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "author": "madulinux <npmjs.com/~madulinux>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madulinux/react-datatable"
+  },
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0"
+  },
+  "scripts": {
+    "test": "jest --passWithNoTests"
+  },
+  "keywords": [
+    "react",
+    "datatable",
+    "table",
+    "paging",
+    "export",
+    "component",
+    "madulinux"
+  ],
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@types/jest": "^29.5.14",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "ts-jest": "^29.3.2",
+    "tsup": "^8.4.0"
+  }
+}
