@@ -1,10 +1,16 @@
 {
   "name": "@madulinux/react-datatable",
-  "version": "0.1.0",
+  "version": "0.1.6",
   "description": "Reusable DataTable component for React with sorting, paging, filter, and export.",
   "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
   "author": "madulinux <npmjs.com/~madulinux>",
   "repository": {
     "type": "git",
@@ -19,7 +25,9 @@
     "react-dom": ">=17.0.0"
   },
   "scripts": {
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "build": "npm run build:tsup",
+    "build:tsup": "tsup src/index.tsx --format esm,cjs --dts --out-dir dist --clean"
   },
   "keywords": [
     "react",
@@ -30,14 +38,25 @@
     "component",
     "madulinux"
   ],
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.2.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.508.0",
+    "react": ">=17.0.0",
+    "tailwind-merge": "^3.2.0"
+  },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@types/jest": "^29.5.14",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "react-dom": "^18.0.0",
     "ts-jest": "^29.3.2",
-    "tsup": "^8.4.0"
+    "tsup": "^8.4.0",
+    "typescript": "^5.0.0"
   }
 }
