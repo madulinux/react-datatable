@@ -1,6 +1,6 @@
 {
   "name": "@madulinux/react-datatable",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Reusable DataTable component for React with sorting, paging, filter, and export.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
