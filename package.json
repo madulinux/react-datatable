@@ -1,6 +1,6 @@
 {
   "name": "@madulinux/react-datatable",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "description": "Reusable DataTable component for React with sorting, paging, filter, and export.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -39,11 +39,19 @@
     "madulinux"
   ],
   "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.3",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "date-fns": "^4.1.0",
     "lucide-react": "^0.508.0",
     "react": ">=17.0.0",
+    "react-day-picker": "^9.11.0",
     "tailwind-merge": "^3.2.0"
   },
   "devDependencies": {
