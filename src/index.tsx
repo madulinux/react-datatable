@@ -23,6 +23,7 @@ import {
 } from './ui/pagination';
 
 import {Select2, Select2Props} from './Select2';
+import { cn } from './lib/utils';
 
 // Export all types
 export type { 
@@ -51,6 +52,9 @@ export {
   PaginationEllipsis,
   getPaginationRange
 };
+
+// Export utility functions
+export { cn };
 
 export {Select2};
 // Export main component as default

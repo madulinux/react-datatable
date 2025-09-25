@@ -10,7 +10,7 @@ import {
   CommandItem,
 } from './ui/command';
 import { Loader2, Check, ChevronsUpDown, X as XIcon } from 'lucide-react';
-import { cn } from './utils/utils';
+import { cn } from './lib/utils';
 
 export type Select2Props<T> = {
   value: T | null | T[];
