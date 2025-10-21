@@ -11,6 +11,9 @@ import DataTable, {
   DataTableResponsiveConfig,
   DataTableLayoutConfig
 } from './DataTable';
+import { DataTablePagination } from './DataTablePagination';
+import { AdvancedFilterValueInput } from './AdvancedFilterValueInput';
+import * as DataTableUtils from './dataTableUtils';
 import { 
   Pagination,
   PaginationContent,
@@ -56,6 +59,10 @@ export {
 // Export utility functions
 export { cn };
 
-export {Select2};
+export { Select2 };
+export { DataTablePagination };
+export { AdvancedFilterValueInput };
+export { DataTableUtils };
+
 // Export main component as default
 export default DataTable;

@@ -1,4 +1,16 @@
 import Select2 from './Select2';
+import { DataTablePagination } from './DataTablePagination';
+import { AdvancedFilterValueInput } from './AdvancedFilterValueInput';
+import {
+    classNames,
+    DATATABLE_CONSTANTS,
+    getResponsiveClasses,
+    getResponsiveTextClasses,
+    getResponsiveButtonClasses,
+    formatOperatorLabel,
+    getDefaultOperators,
+    toError,
+} from './dataTableUtils';
 import {
     ChevronDown,
     ChevronsLeft,
@@ -162,10 +174,38 @@ export interface DataTableProps<T> {
     onAdvancedFilter?: (filterGroup: DataTableFilterGroup) => void;
 }
 
-function classNames(...classes: (string | boolean | undefined)[]) {
-    return classes.filter(Boolean).join(' ');
-}
+// Constants imported from dataTableUtils
 
+/**
+ * DataTable - Advanced data table component with sorting, filtering, pagination, and more
+ * 
+ * @template T - Type of data items, must have id property
+ * 
+ * @example
+ * // Basic usage
+ * <DataTable
+ *   columns={[
+ *     { key: 'name', label: 'Name', sortable: true },
+ *     { key: 'email', label: 'Email' }
+ *   ]}
+ *   fetchData={async ({ page, perPage, search }) => {
+ *     const res = await fetch(`/api/users?page=${page}`);
+ *     return res.json();
+ *   }}
+ * />
+ * 
+ * @example
+ * // With all features
+ * <DataTable
+ *   columns={columns}
+ *   fetchData={fetchUsers}
+ *   filters={filters}
+ *   selectionConfig={{ enableRowSelection: true }}
+ *   exportConfig={{ enableExport: true }}
+ *   enableColumnVisibility
+ *   enableAdvancedFilters
+ * />
+ */
 export function DataTable<T extends { id: number | string }>({
     columns: initialColumns,
     defaultOrderDir = 'asc',
@@ -197,6 +237,7 @@ export function DataTable<T extends { id: number | string }>({
     const [orderDir, setOrderDir] = useState<'asc' | 'desc'>(defaultOrderDir);
     const [filterValues, setFilterValues] = useState<Record<string, string | number | undefined>>({});
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
 
     // Column management state
     const [columns, setColumns] = useState<DataTableColumn<T>[]>(() => {
@@ -237,9 +278,13 @@ export function DataTable<T extends { id: number | string }>({
     const [screenSize, setScreenSize] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
     const [isMobileView, setIsMobileView] = useState(false);
     const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
+    const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
-    // Get visible columns
-    const visibleColumns = columns.filter((col) => col.visible !== false);
+    // Get visible columns (memoized)
+    const visibleColumns = useMemo(
+        () => columns.filter((col) => col.visible !== false),
+        [columns],
+    );
 
     // Selection configuration with defaults
     const selectionSettings = useMemo(
@@ -531,10 +576,10 @@ export function DataTable<T extends { id: number | string }>({
                 link.click();
                 document.body.removeChild(link);
                 window.URL.revokeObjectURL(url);
-            } catch (error) {
+            } catch (err) {
+                const error = toError(err);
                 console.error('Export failed:', error);
-                // You can add toast notification here
-                alert('Export gagal. Silakan coba lagi.');
+                setError(error);
             } finally {
                 setIsExporting(false);
             }
@@ -544,6 +589,7 @@ export function DataTable<T extends { id: number | string }>({
 
     const fetchTableData = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const result = await fetchData({
                 page,
@@ -555,14 +601,20 @@ export function DataTable<T extends { id: number | string }>({
             });
             setData(result.data);
             setTotal(result.total);
+        } catch (err) {
+            const error = toError(err);
+            setError(error);
+            setData([]);
+            setTotal(0);
+            console.error('Failed to fetch table data:', error);
         } finally {
             setLoading(false);
         }
-    }, [fetchData, page, perPage, search, orderBy, orderDir, activeFilterValues, refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [fetchData, page, perPage, search, orderBy, orderDir, activeFilterValues]);
 
     useEffect(() => {
         fetchTableData();
-    }, [fetchTableData]);
+    }, [fetchTableData, refreshTrigger]);
 
     // Save column preferences when columns change
     useEffect(() => {
@@ -651,176 +703,15 @@ export function DataTable<T extends { id: number | string }>({
         (fieldKey: string) => {
             const field = advancedFilters.find((f) => f.key === fieldKey);
             if (!field) return ['equals'];
-
-            if (field.operators) return field.operators;
-
-            // Default operators based on field type
-            switch (field.type) {
-                case 'text':
-                    return ['equals', 'contains', 'startsWith', 'endsWith'];
-                case 'number':
-                    return ['equals', 'gt', 'gte', 'lt', 'lte', 'between'];
-                case 'select':
-                    return ['equals', 'in', 'notIn'];
-                case 'multiselect':
-                    return ['in', 'notIn'];
-                case 'date':
-                    return ['equals', 'gt', 'gte', 'lt', 'lte'];
-                case 'daterange':
-                    return ['between', 'gt', 'gte', 'lt', 'lte'];
-                case 'boolean':
-                    return ['equals'];
-                default:
-                    return ['equals'];
-            }
+            return field.operators || getDefaultOperators(field.type);
         },
         [advancedFilters],
     );
 
-    // Pagination component
-    const PaginationComponent = useCallback(() => {
-        if (totalPages <= 1) return null;
-        const maxPage = screenSize === 'mobile' ? 3 : 5;
-        return (
-            <div
-                className={classNames(
-                    'flex gap-2',
-                    layoutSettings.paginationAlignment === 'left'
-                        ? 'justify-start'
-                        : layoutSettings.paginationAlignment === 'center'
-                          ? 'justify-center'
-                          : layoutSettings.paginationAlignment === 'right'
-                            ? 'justify-end'
-                            : layoutSettings.paginationAlignment === 'between'
-                              ? 'flex-col justify-between sm:flex-row sm:items-center'
-                              : 'flex-col justify-between sm:flex-row sm:items-center',
-                )}
-            >
-                {/* Record Info */}
-                {layoutSettings.showRecordInfo && (
-                    <div
-                        className={classNames(
-                            'text-sm text-gray-600',
-                            layoutSettings.paginationAlignment === 'between' ? 'order-2 sm:order-1' : '',
-                            responsiveSettings.compactMode && isMobileView && 'text-center text-xs sm:text-left',
-                        )}
-                    >
-                        Menampilkan {data.length === 0 ? 0 : (page - 1) * perPage + 1}
-                        {' - '}
-                        {data.length === 0 ? 0 : (page - 1) * perPage + data.length}
-                        {' dari '}
-                        {total} data
-                    </div>
-                )}
-
-                {/* Pagination Controls */}
-                <div
-                    className={classNames(
-                        'flex justify-center',
-                        layoutSettings.paginationAlignment === 'between'
-                            ? 'order-1 w-full sm:order-2 sm:w-auto'
-                            : layoutSettings.paginationAlignment === 'left'
-                              ? 'w-full justify-start'
-                              : layoutSettings.paginationAlignment === 'right'
-                                ? 'w-full justify-end'
-                                : 'w-full',
-                    )}
-                >
-                    <Pagination>
-                        <PaginationContent>
-                            {/* first page */}
-                            {page > 1 && (
-                                <PaginationItem>
-                                    <PaginationLink
-                                        href="#"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setPage(1);
-                                        }}
-                                        isActive={page === 1}
-                                    >
-                                        <ChevronsLeft className="size-4" />
-                                    </PaginationLink>
-                                </PaginationItem>
-                            )}
-                            {/* previous page */}
-                            {page > 1 && (
-                                <PaginationItem>
-                                    <PaginationPrevious
-                                        href="#"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            if (page > 1) setPage((prev) => prev - 1);
-                                        }}
-                                        aria-disabled={page === 1}
-                                        style={page === 1 ? { pointerEvents: 'none', opacity: 0.5 } : {}}
-                                    />
-                                </PaginationItem>
-                            )}
-                            {/* Page Numbers */}
-                            {Array.from({ length: Math.min(totalPages, maxPage) }, (_, i) => {
-                                let pageNum;
-                                if (totalPages <= maxPage) {
-                                    pageNum = i + 1;
-                                } else if (page <= Math.floor(maxPage / 2)) {
-                                    pageNum = i + 1;
-                                } else if (page >= totalPages - Math.floor(maxPage / 2)) {
-                                    pageNum = totalPages - maxPage + i;
-                                } else {
-                                    pageNum = page - Math.floor(maxPage / 2) + i;
-                                }
-
-                                return (
-                                    <PaginationItem key={pageNum}>
-                                        <PaginationLink
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                setPage(pageNum);
-                                            }}
-                                            isActive={pageNum === page}
-                                        >
-                                            {pageNum}
-                                        </PaginationLink>
-                                    </PaginationItem>
-                                );
-                            })}
-
-                            {/* next page */}
-                            {page < totalPages && (
-                                <PaginationItem>
-                                    <PaginationNext
-                                        href="#"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            if (page < totalPages) setPage((prev) => prev + 1);
-                                        }}
-                                        aria-disabled={page === totalPages}
-                                        style={page === totalPages ? { pointerEvents: 'none', opacity: 0.5 } : {}}
-                                    />
-                                </PaginationItem>
-                            )}
-                            {/* last page */}
-                            {page < totalPages && (
-                                <PaginationItem>
-                                    <PaginationLink
-                                        href="#"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setPage(totalPages);
-                                        }}
-                                        isActive={page === totalPages}
-                                    >
-                                        <ChevronsRight className="size-4" />
-                                    </PaginationLink>
-                                </PaginationItem>
-                            )}
-                        </PaginationContent>
-                    </Pagination>
-                </div>
-            </div>
-        );
-    }, [totalPages, layoutSettings, responsiveSettings, isMobileView, data.length, page, perPage, total, screenSize]);
+    // Pagination handler
+    const handlePageChange = useCallback((newPage: number) => {
+        setPage(newPage);
+    }, []);
 
     return (
         <div className={classNames('space-y-4', className)}>
@@ -1160,29 +1051,7 @@ export function DataTable<T extends { id: number | string }>({
                                         <SelectContent>
                                             {getOperatorsForField(rule.field).map((op) => (
                                                 <SelectItem key={op} value={op}>
-                                                    {op === 'equals'
-                                                        ? 'Equals'
-                                                        : op === 'contains'
-                                                          ? 'Contains'
-                                                          : op === 'startsWith'
-                                                            ? 'Starts with'
-                                                            : op === 'endsWith'
-                                                              ? 'Ends with'
-                                                              : op === 'gt'
-                                                                ? 'Greater than'
-                                                                : op === 'gte'
-                                                                  ? 'Greater or equal'
-                                                                  : op === 'lt'
-                                                                    ? 'Less than'
-                                                                    : op === 'lte'
-                                                                      ? 'Less or equal'
-                                                                      : op === 'between'
-                                                                        ? 'Between'
-                                                                        : op === 'in'
-                                                                          ? 'In'
-                                                                          : op === 'notIn'
-                                                                            ? 'Not in'
-                                                                            : op}
+                                                    {formatOperatorLabel(op)}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -1190,177 +1059,11 @@ export function DataTable<T extends { id: number | string }>({
 
                                     {/* Value Input */}
                                     <div className="flex-1">
-                                        {(() => {
-                                            const field = advancedFilters.find((f) => f.key === rule.field);
-                                            if (!field)
-                                                return (
-                                                    <Input
-                                                        placeholder="Value"
-                                                        value={String(rule.value)}
-                                                        onChange={(e) => updateFilterRule(index, { value: e.target.value })}
-                                                    />
-                                                );
-
-                                            if (field.type === 'select' || field.type === 'multiselect') {
-                                                // Use multiselect when operator is 'in' or 'notIn'
-                                                const shouldUseMultiSelect = rule.operator === 'in' || rule.operator === 'notIn';
-
-                                                if (shouldUseMultiSelect) {
-                                                    // Convert field options to Select2 format
-                                                    const select2Options =
-                                                        field.options?.map((opt) => ({
-                                                            id: String(opt.value),
-                                                            label: opt.label,
-                                                        })) || [];
-
-                                                    // Parse current value (could be string or array)
-                                                    let currentValue: Array<{ id: string; label: string }> = [];
-                                                    if (rule.value) {
-                                                        if (Array.isArray(rule.value)) {
-                                                            currentValue = rule.value.map((v) => ({
-                                                                id: String(v),
-                                                                label: field.options?.find((opt) => opt.value === v)?.label || String(v),
-                                                            }));
-                                                        } else if (typeof rule.value === 'string' && rule.value.includes(',')) {
-                                                            // Handle comma-separated values
-                                                            const values = rule.value.split(',');
-                                                            currentValue = values.map((v) => ({
-                                                                id: v.trim(),
-                                                                label: field.options?.find((opt) => opt.value === v.trim())?.label || v.trim(),
-                                                            }));
-                                                        } else {
-                                                            currentValue = [
-                                                                {
-                                                                    id: String(rule.value),
-                                                                    label:
-                                                                        field.options?.find((opt) => opt.value === rule.value)?.label ||
-                                                                        String(rule.value),
-                                                                },
-                                                            ];
-                                                        }
-                                                    }
-
-                                                    return (
-                                                        <Select2
-                                                            value={currentValue}
-                                                            onChange={(selected) => {
-                                                                if (Array.isArray(selected)) {
-                                                                    const values = selected.map((item) => item.id);
-                                                                    updateFilterRule(index, { value: values });
-                                                                } else {
-                                                                    updateFilterRule(index, { value: selected ? [selected.id] : [] });
-                                                                }
-                                                            }}
-                                                            fetchOptions={async ({ search }) => {
-                                                                const filtered = select2Options.filter((opt) =>
-                                                                    opt.label.toLowerCase().includes(search.toLowerCase()),
-                                                                );
-                                                                return { data: filtered, hasMore: false };
-                                                            }}
-                                                            isMulti={true}
-                                                            placeholder="Select values"
-                                                        />
-                                                    );
-                                                } else {
-                                                    // Use single select for other operators
-                                                    return (
-                                                        <Select
-                                                            value={String(rule.value)}
-                                                            onValueChange={(value) => updateFilterRule(index, { value })}
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Select value" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {field.options?.map((option) => (
-                                                                    <SelectItem key={option.value} value={String(option.value)}>
-                                                                        {option.label}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    );
-                                                }
-                                            }
-
-                                            if (field.type === 'boolean') {
-                                                return (
-                                                    <Select
-                                                        value={String(rule.value)}
-                                                        onValueChange={(value) => updateFilterRule(index, { value: value === 'true' })}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select value" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="true">True</SelectItem>
-                                                            <SelectItem value="false">False</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                );
-                                            }
-
-                                            if (field.type === 'date') {
-                                                return (
-                                                    <DatePicker
-                                                        value={rule.value ? new Date(String(rule.value)) : undefined}
-                                                        onChange={(date) =>
-                                                            updateFilterRule(index, {
-                                                                value: date ? date.toISOString().split('T')[0] : '',
-                                                            })
-                                                        }
-                                                        placeholder="Select date"
-                                                    />
-                                                );
-                                            }
-
-                                            if (field.type === 'daterange') {
-                                                // For daterange, we expect value to be "startDate,endDate" format
-                                                const dateValues = String(rule.value).split(',');
-                                                const startDate = dateValues[0] ? new Date(dateValues[0]) : undefined;
-                                                const endDate = dateValues[1] ? new Date(dateValues[1]) : undefined;
-
-                                                return (
-                                                    <div className="flex gap-2">
-                                                        <DatePicker
-                                                            value={startDate}
-                                                            onChange={(date) => {
-                                                                const newStartDate = date ? date.toISOString().split('T')[0] : '';
-                                                                const currentEndDate = dateValues[1] || '';
-                                                                updateFilterRule(index, {
-                                                                    value: `${newStartDate},${currentEndDate}`,
-                                                                });
-                                                            }}
-                                                            placeholder="Start date"
-                                                        />
-                                                        <DatePicker
-                                                            value={endDate}
-                                                            onChange={(date) => {
-                                                                const currentStartDate = dateValues[0] || '';
-                                                                const newEndDate = date ? date.toISOString().split('T')[0] : '';
-                                                                updateFilterRule(index, {
-                                                                    value: `${currentStartDate},${newEndDate}`,
-                                                                });
-                                                            }}
-                                                            placeholder="End date"
-                                                        />
-                                                    </div>
-                                                );
-                                            }
-
-                                            return (
-                                                <Input
-                                                    type={field.type === 'number' ? 'number' : 'text'}
-                                                    placeholder={field.placeholder || 'Value'}
-                                                    value={String(rule.value)}
-                                                    onChange={(e) =>
-                                                        updateFilterRule(index, {
-                                                            value: field.type === 'number' ? Number(e.target.value) : e.target.value,
-                                                        })
-                                                    }
-                                                />
-                                            );
-                                        })()}
+                                        <AdvancedFilterValueInput
+                                            field={advancedFilters.find((f) => f.key === rule.field)}
+                                            rule={rule}
+                                            onUpdate={(value) => updateFilterRule(index, { value })}
+                                        />
                                     </div>
 
                                     {/* Remove Button */}
@@ -1379,10 +1082,45 @@ export function DataTable<T extends { id: number | string }>({
                 </div>
             )}
 
+            {/* Error Display */}
+            {error && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4" role="alert">
+                    <div className="flex items-start gap-3">
+                        <div className="flex-1">
+                            <h3 className="font-semibold text-red-800">Terjadi Kesalahan</h3>
+                            <p className="mt-1 text-sm text-red-700">{error.message}</p>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                setError(null);
+                                fetchTableData();
+                            }}
+                            className="border-red-300 text-red-700 hover:bg-red-100"
+                        >
+                            Coba Lagi
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {/* Top Pagination */}
             {(layoutSettings.paginationPosition === 'top' || layoutSettings.paginationPosition === 'both') && (
                 <div className="border-b pb-4">
-                    <PaginationComponent />
+                    <DataTablePagination
+                        page={page}
+                        totalPages={totalPages}
+                        perPage={perPage}
+                        total={total}
+                        dataLength={data.length}
+                        screenSize={screenSize}
+                        showRecordInfo={layoutSettings.showRecordInfo}
+                        paginationAlignment={layoutSettings.paginationAlignment}
+                        compactMode={responsiveSettings.compactMode}
+                        isMobileView={isMobileView}
+                        onPageChange={handlePageChange}
+                    />
                 </div>
             )}
 
@@ -1397,7 +1135,7 @@ export function DataTable<T extends { id: number | string }>({
                     <TableHeader className={responsiveSettings.mobileStackedView && isMobileView ? 'hidden' : ''}>
                         <TableRow>
                             {selectionSettings.enableRowSelection && (
-                                <TableCell className={classNames('w-12', responsiveSettings.compactMode && isMobileView && 'px-2 py-1')}>
+                                <TableCell className={getResponsiveClasses(DATATABLE_CONSTANTS.CHECKBOX_WIDTH, responsiveSettings.compactMode, isMobileView)}>
                                     {selectionSettings.selectionMode === 'multiple' && (
                                         <Checkbox checked={isAllSelected} onCheckedChange={handleSelectAll} aria-label="Select all rows" />
                                     )}
@@ -1410,8 +1148,23 @@ export function DataTable<T extends { id: number | string }>({
                                         col.sortable ? 'cursor-pointer select-none' : '',
                                         col.width ? col.width : '',
                                         enableColumnReordering ? 'group relative' : '',
+                                        draggedColumn === col.key && 'opacity-50',
+                                        dragOverColumn === col.key && 'bg-blue-50 border-l-2 border-blue-500',
                                     )}
+                                    role={col.sortable ? 'button' : undefined}
+                                    tabIndex={col.sortable ? 0 : undefined}
                                     onClick={() => col.sortable && handleSort(col.key as string)}
+                                    onKeyDown={(e) => {
+                                        if (col.sortable && (e.key === 'Enter' || e.key === ' ')) {
+                                            e.preventDefault();
+                                            handleSort(col.key as string);
+                                        }
+                                    }}
+                                    aria-sort={
+                                        col.sortable && orderBy === col.key
+                                            ? (orderDir === 'asc' ? 'ascending' : 'descending')
+                                            : undefined
+                                    }
                                     draggable={enableColumnReordering}
                                     onDragStart={(e) => {
                                         if (enableColumnReordering) {
@@ -1423,6 +1176,12 @@ export function DataTable<T extends { id: number | string }>({
                                         if (enableColumnReordering && draggedColumn) {
                                             e.preventDefault();
                                             e.dataTransfer.dropEffect = 'move';
+                                            setDragOverColumn(col.key as string);
+                                        }
+                                    }}
+                                    onDragLeave={() => {
+                                        if (enableColumnReordering) {
+                                            setDragOverColumn(null);
                                         }
                                     }}
                                     onDrop={(e) => {
@@ -1436,11 +1195,19 @@ export function DataTable<T extends { id: number | string }>({
                                             setDraggedColumn(null);
                                         }
                                     }}
-                                    onDragEnd={() => setDraggedColumn(null)}
+                                    onDragEnd={() => {
+                                        setDraggedColumn(null);
+                                        setDragOverColumn(null);
+                                    }}
                                 >
                                     <div className="flex items-center gap-1">
                                         {enableColumnReordering && (
-                                            <GripVertical className="h-4 w-4 cursor-grab opacity-0 group-hover:opacity-50 active:cursor-grabbing" />
+                                            <GripVertical 
+                                                className={classNames(
+                                                    'h-4 w-4 cursor-grab opacity-0 group-hover:opacity-50 active:cursor-grabbing',
+                                                    draggedColumn === col.key && 'opacity-100'
+                                                )} 
+                                            />
                                         )}
                                         {col.label}
                                         {col.sortable && orderBy !== col.key && (
@@ -1484,8 +1251,7 @@ export function DataTable<T extends { id: number | string }>({
                                     {selectionSettings.enableRowSelection && (
                                         <TableCell
                                             className={classNames(
-                                                'w-12',
-                                                responsiveSettings.compactMode && isMobileView && 'px-2 py-1',
+                                                getResponsiveClasses(DATATABLE_CONSTANTS.CHECKBOX_WIDTH, responsiveSettings.compactMode, isMobileView),
                                                 responsiveSettings.mobileStackedView && isMobileView && 'block md:table-cell',
                                             )}
                                         >
@@ -1500,7 +1266,7 @@ export function DataTable<T extends { id: number | string }>({
                                         <TableCell
                                             key={col.key as string}
                                             className={classNames(
-                                                responsiveSettings.compactMode && isMobileView && 'px-2 py-1',
+                                                getResponsiveClasses('', responsiveSettings.compactMode, isMobileView),
                                                 responsiveSettings.mobileStackedView && isMobileView && 'block md:table-cell',
                                             )}
                                         >
@@ -1515,7 +1281,7 @@ export function DataTable<T extends { id: number | string }>({
                                     {actions && (
                                         <TableCell
                                             className={classNames(
-                                                responsiveSettings.compactMode && isMobileView && 'px-2 py-1',
+                                                getResponsiveClasses('', responsiveSettings.compactMode, isMobileView),
                                                 responsiveSettings.mobileStackedView && isMobileView && 'block md:table-cell',
                                             )}
                                         >
@@ -1535,7 +1301,19 @@ export function DataTable<T extends { id: number | string }>({
             {/* Bottom Pagination */}
             {(layoutSettings.paginationPosition === 'bottom' || layoutSettings.paginationPosition === 'both') && (
                 <div className="border-t pt-4">
-                    <PaginationComponent />
+                    <DataTablePagination
+                        page={page}
+                        totalPages={totalPages}
+                        perPage={perPage}
+                        total={total}
+                        dataLength={data.length}
+                        screenSize={screenSize}
+                        showRecordInfo={layoutSettings.showRecordInfo}
+                        paginationAlignment={layoutSettings.paginationAlignment}
+                        compactMode={responsiveSettings.compactMode}
+                        isMobileView={isMobileView}
+                        onPageChange={handlePageChange}
+                    />
                 </div>
             )}
         </div>
