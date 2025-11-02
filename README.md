@@ -381,6 +381,26 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
+## 📋 Changelog
+
+### v1.0.2 (2024-11-02)
+**🐛 Bug Fixes**
+- Fixed "Invalid hook call" error when using package in Laravel Inertia and other React applications
+- Removed React from bundled dependencies - now properly uses peer dependencies
+- Added `react/jsx-runtime` and `react/jsx-dev-runtime` to external dependencies
+- Package now correctly shares React instance with host application
+
+**⚠️ Breaking Changes**
+- None - this is a bug fix release
+
+**📦 Migration**
+If you're upgrading from v1.0.1 or earlier:
+1. Update to v1.0.2: `npm install @madulinux/react-datatable@latest`
+2. Clear your build cache if using Vite/Laravel Mix: `npm run build` or `php artisan view:clear`
+3. Ensure React >= 17.0.0 is installed in your project
+
+---
+
 ## 📝 License
 
 MIT © [madulinux](https://github.com/madulinux)
