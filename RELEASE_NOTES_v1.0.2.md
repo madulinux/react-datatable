@@ -1,4 +1,88 @@
-# Release Notes v1.0.2
+# Release Notes v1.0.3 (Complete Fix)
+
+## 🐛 Critical Bug Fix: React Bundling from Radix UI
+
+### Update from v1.0.2
+Version 1.0.2 fixed React bundling from the main package, but Radix UI components were still bundling their own React instances. Version 1.0.3 completes the fix.
+
+### Problem in v1.0.2
+Even after removing React from main dependencies, error still occurred because `@radix-ui/react-select` and other Radix UI packages were bundling their own React:
+
+```
+Warning: Invalid hook call...
+at useScope (chunk-QGS26YSO.js)
+at Select (@radix-ui_react-select.js)
+```
+
+### Complete Solution in v1.0.3
+- ✅ Added esbuild alias to force all dependencies to use external React
+- ✅ Configured `noExternal` for Radix UI packages (bundle them but use external React)
+- ✅ All 43 React imports now use `require("react")` instead of bundled code
+- ✅ Verified no React implementation code (`ReactCurrentDispatcher`) in bundle
+
+### Changes Made
+
+#### tsup.config.ts
+```diff
+  esbuildOptions(options) {
+    options.conditions = ['module'];
++   // Ensure React is not bundled from any dependency
++   options.alias = {
++     'react': 'react',
++     'react-dom': 'react-dom',
++   };
+  },
++ noExternal: [
++   // Bundle these but they will use external React
++   '@radix-ui/react-checkbox',
++   '@radix-ui/react-dialog',
++   '@radix-ui/react-dropdown-menu',
++   '@radix-ui/react-popover',
++   '@radix-ui/react-select',
++   '@radix-ui/react-slot',
++ ],
+```
+
+### Bundle Size
+- v1.0.2: 111 KB (Radix UI external, caused errors)
+- v1.0.3: 375 KB (Radix UI bundled, React external, works correctly)
+
+The size increase is expected and correct - Radix UI components are now bundled but share React with your app.
+
+### Testing Instructions
+
+#### For Laravel Inertia Users:
+1. Update package:
+   ```bash
+   npm install @madulinux/react-datatable@1.0.3
+   ```
+
+2. Clear build cache:
+   ```bash
+   npm run build
+   php artisan view:clear
+   ```
+
+3. Restart dev server:
+   ```bash
+   npm run dev
+   ```
+
+4. Test - error should be completely gone!
+
+### Verification Commands
+
+```bash
+# Should show 43 external React imports
+grep -o "require(\"react\")" node_modules/@madulinux/react-datatable/dist/index.js | wc -l
+
+# Should return nothing (no bundled React implementation)
+grep "ReactCurrentDispatcher" node_modules/@madulinux/react-datatable/dist/index.js
+```
+
+---
+
+# Release Notes v1.0.2 (Partial Fix)
 
 ## 🐛 Critical Bug Fix: React Bundling Issue
 

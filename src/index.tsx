@@ -8,11 +8,13 @@ import DataTable, {
   DataTableExportConfig,
   DataTableBulkAction,
   DataTableSelectionConfig,
+  DataTableHeaderConfig,
   DataTableResponsiveConfig,
   DataTableLayoutConfig
 } from './DataTable';
 import { DataTablePagination } from './DataTablePagination';
 import { AdvancedFilterValueInput } from './AdvancedFilterValueInput';
+import { DataTableFilterInput } from './DataTableFilterInput';
 import * as DataTableUtils from './dataTableUtils';
 import { 
   Pagination,
@@ -39,6 +41,7 @@ export type {
   DataTableExportConfig,
   DataTableBulkAction,
   DataTableSelectionConfig,
+  DataTableHeaderConfig,
   DataTableResponsiveConfig,
   DataTableLayoutConfig,
   Select2Props
@@ -62,6 +65,7 @@ export { cn };
 export { Select2 };
 export { DataTablePagination };
 export { AdvancedFilterValueInput };
+export { DataTableFilterInput };
 export { DataTableUtils };
 
 // Export main component as default

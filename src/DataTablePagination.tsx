@@ -38,7 +38,7 @@ export function DataTablePagination({
     screenSize,
     showRecordInfo = true,
     paginationAlignment = 'between',
-    compactMode = false,
+    compactMode = true,
     isMobileView = false,
     onPageChange,
 }: DataTablePaginationProps) {

@@ -383,6 +383,191 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📋 Changelog
 
+### v1.0.7 (2024-11-03)
+**🐛 Critical Bug Fix - Filter Not Triggering Fetch**
+- Fixed filter changes not triggering data fetch
+  - Wrapped `activeFilterValues` in `useMemo` to ensure changes are tracked
+  - Filter state changes now properly trigger `fetchTableData` re-execution
+  - Added debug logging to track filter value changes
+- Enhanced debug logging:
+  - `activeFilterValues updated: {...}` - When filter values change
+  - `Filter changed: [key] [value]` - When user changes filter
+  - `Fetching data with filters: {...}` - When API is called
+
+**Root Cause:**
+`activeFilterValues` was a simple assignment (`externalFilterValues ?? filterValues`), which didn't create a new reference when `filterValues` changed. React's dependency tracking couldn't detect the change, so `fetchTableData` wasn't re-executed.
+
+**Solution:**
+```typescript
+// Before (broken)
+const activeFilterValues = externalFilterValues ?? filterValues;
+
+// After (fixed)
+const activeFilterValues = useMemo(() => {
+  return externalFilterValues ?? filterValues;
+}, [externalFilterValues, filterValues]);
+```
+
+**Expected Console Logs After Fix:**
+```
+Filter changed: status active
+New filter values: {status: 'active'}
+activeFilterValues updated: {status: 'active'}  ← NEW
+Fetching data with filters: {status: 'active'}  ← Now triggers!
+```
+
+### v1.0.6 (2024-11-03)
+**🐛 Critical Bug Fixes**
+- Fixed "SelectItem cannot have empty value" error in select/multiselect filters
+  - Changed placeholder value from `""` to `"__all__"` 
+  - Properly handles undefined/cleared filter values
+- Fixed "Multiple React instances" error when using date filter
+  - Removed DatePicker component that was bundling React
+  - Replaced with native HTML5 `<input type="date">` 
+  - Date and daterange filters now use native browser date picker
+- Removed unused DatePicker import to prevent React bundling issues
+
+**⚠️ Breaking Changes**
+- Date filters now use native HTML5 date input instead of custom DatePicker
+- DatePicker component is no longer used (prevents React bundling conflicts)
+
+**📦 Migration**
+If you're using date filters:
+```tsx
+// Still works the same way, just uses native date input
+{
+  key: 'createdAt',
+  label: 'Created Date',
+  type: 'date',
+  width: 180
+}
+```
+
+### v1.0.5 (2024-11-03)
+**✨ Major Filter System Improvement**
+- Created `DataTableFilterInput` component for proper filter type handling
+- Full support for all filter types:
+  - `select` - Dropdown with options
+  - `multiselect` - Multiple selection (simplified)
+  - `text` / `search` - Text input
+  - `number` - Number input
+  - `date` - Date picker
+  - `daterange` - Date range picker (from/to)
+  - `boolean` - Checkbox
+- Enhanced `DataTableFilter` interface:
+  - `width`: Custom width for filter input
+  - `fetchOptions`: Async data fetching for select/multiselect
+- Filters now properly use their `type` property instead of defaulting to select
+- Better responsive sizing for filter inputs
+- Improved filter value handling (supports string, number, boolean, undefined)
+
+**📦 Usage Example**
+```tsx
+<DataTable
+  columns={columns}
+  fetchData={fetchData}
+  filters={[
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: 'active', label: 'Active' },
+        { value: 'inactive', label: 'Inactive' }
+      ],
+      width: 150
+    },
+    {
+      key: 'search',
+      label: 'Search',
+      type: 'text',
+      placeholder: 'Search products...',
+      width: 250
+    },
+    {
+      key: 'price',
+      label: 'Price',
+      type: 'number',
+      placeholder: 'Min price',
+      width: 120
+    },
+    {
+      key: 'createdAt',
+      label: 'Created Date',
+      type: 'date',
+      width: 180
+    },
+    {
+      key: 'featured',
+      label: 'Featured',
+      type: 'boolean'
+    }
+  ]}
+/>
+```
+
+### v1.0.4 (2024-11-03)
+**✨ New Features & Improvements**
+- Added `DataTableHeaderConfig` interface for header customization
+  - `showHeader`: Show/hide table header
+  - `stickyHeader`: Make header sticky on scroll
+  - `headerClassName`: Custom className for header
+  - `headerRowClassName`: Custom className for header row
+  - `headerHeight`: Custom header height
+- Enhanced `DataTableColumn` interface:
+  - `width`, `minWidth`, `maxWidth`: Proper CSS width support (accepts '200px', '20%', or 200)
+  - `headerClassName`: Custom className for header cells
+  - `cellClassName`: Custom className for body cells
+  - `align`: Text alignment ('left' | 'center' | 'right')
+- Fixed width property - now uses inline styles instead of broken Tailwind classes
+- Added utility functions: `getColumnStyle()`, `getAlignmentClass()`, `getCSSWidth()`
+- Improved responsive table styling with better overflow handling
+
+**🐛 Bug Fixes**
+- Fixed column width not working (was using invalid `'w-' + col.width` approach)
+- Fixed header and cell alignment support
+
+**📦 Usage Example**
+```tsx
+<DataTable
+  columns={[
+    { 
+      key: 'name', 
+      label: 'Name', 
+      width: 200,  // or '200px' or '20%'
+      align: 'left',
+      headerClassName: 'bg-blue-50',
+      cellClassName: 'font-medium'
+    },
+    { 
+      key: 'price', 
+      label: 'Price', 
+      width: '15%',
+      align: 'right' 
+    }
+  ]}
+  headerConfig={{
+    stickyHeader: true,
+    headerClassName: 'bg-gray-100'
+  }}
+  // ... other props
+/>
+```
+
+### v1.0.3 (2024-11-02)
+**🐛 Critical Bug Fix**
+- Fixed "Invalid hook call" error from Radix UI components bundling their own React
+- Added esbuild alias to ensure React is never bundled from any dependency
+- Configured `noExternal` for Radix UI packages to bundle them but use external React
+- Package now correctly shares single React instance with host application across all dependencies
+
+**📦 Migration**
+If you're upgrading from v1.0.2 or earlier:
+1. Update to v1.0.3: `npm install @madulinux/react-datatable@latest`
+2. Clear your build cache: `npm run build` or `php artisan view:clear`
+3. Restart your dev server
+4. Error should be completely resolved
+
 ### v1.0.2 (2024-11-02)
 **🐛 Bug Fixes**
 - Fixed "Invalid hook call" error when using package in Laravel Inertia and other React applications
@@ -390,14 +575,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - Added `react/jsx-runtime` and `react/jsx-dev-runtime` to external dependencies
 - Package now correctly shares React instance with host application
 
-**⚠️ Breaking Changes**
-- None - this is a bug fix release
-
-**📦 Migration**
-If you're upgrading from v1.0.1 or earlier:
-1. Update to v1.0.2: `npm install @madulinux/react-datatable@latest`
-2. Clear your build cache if using Vite/Laravel Mix: `npm run build` or `php artisan view:clear`
-3. Ensure React >= 17.0.0 is installed in your project
+**⚠️ Note:** This version had partial fix. v1.0.3 completes the fix for Radix UI dependencies.
 
 ---
 

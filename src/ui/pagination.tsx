@@ -45,7 +45,7 @@ type PaginationLinkProps = {
 function PaginationLink({
   className,
   isActive,
-  size = "icon",
+  size = "sm",
   ...props
 }: PaginationLinkProps) {
   return (
@@ -55,7 +55,7 @@ function PaginationLink({
       data-active={isActive}
       className={cn(
         buttonVariants({
-          variant: isActive ? "outline-success" : "outline",
+          variant: isActive ? "default" : "outline",
           size,
         }),
         className

@@ -1,6 +1,7 @@
 import Select2 from './Select2';
 import { DataTablePagination } from './DataTablePagination';
 import { AdvancedFilterValueInput } from './AdvancedFilterValueInput';
+import { DataTableFilterInput } from './DataTableFilterInput';
 import {
     classNames,
     DATATABLE_CONSTANTS,
@@ -10,6 +11,8 @@ import {
     formatOperatorLabel,
     getDefaultOperators,
     toError,
+    getColumnStyle,
+    getAlignmentClass,
 } from './dataTableUtils';
 import {
     ChevronDown,
@@ -43,18 +46,23 @@ import {
 import { Input } from './ui/input';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from './ui/pagination'; // Fix import path for pagination components
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from './ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 
 export interface DataTableColumn<T> {
     key: keyof T | string;
     label: string;
     sortable?: boolean;
     render?: (row: T) => React.ReactNode;
-    width?: string;
+    width?: string | number; // CSS width value (e.g., '200px', '20%', 200)
+    minWidth?: string | number; // CSS min-width value
+    maxWidth?: string | number; // CSS max-width value
     visible?: boolean;
     pinned?: boolean; // For future: pin columns left/right
     priority?: number; // 1 = highest priority (always show), 5 = lowest (hide first on mobile)
     mobileLabel?: string; // Custom label for mobile view
+    headerClassName?: string; // Custom className for header cell
+    cellClassName?: string; // Custom className for body cells
+    align?: 'left' | 'center' | 'right'; // Text alignment
 }
 
 export interface DataTableFilter {
@@ -65,6 +73,12 @@ export interface DataTableFilter {
     type?: 'select' | 'multiselect' | 'daterange' | 'date' | 'search' | 'number' | 'boolean' | 'text';
     placeholder?: string;
     searchable?: boolean; // For multiselect with search
+    width?: string | number; // Custom width for filter input
+    // For async select/multiselect
+    fetchOptions?: (params: { search: string; page: number }) => Promise<{
+        data: { id: number | string; label: string }[];
+        hasMore: boolean;
+    }>;
 }
 
 export interface DataTableAdvancedFilter {
@@ -114,6 +128,14 @@ export interface DataTableSelectionConfig<T> {
     selectionMode?: 'single' | 'multiple';
     bulkActions?: DataTableBulkAction<T>[];
     onSelectionChange?: (selectedRows: T[]) => void;
+}
+
+export interface DataTableHeaderConfig {
+    showHeader?: boolean; // Show/hide table header (default: true)
+    stickyHeader?: boolean; // Make header sticky on scroll (default: false)
+    headerClassName?: string; // Custom className for entire header
+    headerRowClassName?: string; // Custom className for header row
+    headerHeight?: string | number; // Custom header height
 }
 
 export interface DataTableResponsiveConfig {
@@ -168,6 +190,7 @@ export interface DataTableProps<T> {
     exportConfig?: DataTableExportConfig;
     selectionConfig?: DataTableSelectionConfig<T>;
     responsiveConfig?: DataTableResponsiveConfig;
+    headerConfig?: DataTableHeaderConfig; // New: Header customization
     layoutConfig?: DataTableLayoutConfig;
     advancedFilters?: DataTableAdvancedFilter[];
     enableAdvancedFilters?: boolean;
@@ -223,6 +246,7 @@ export function DataTable<T extends { id: number | string }>({
     exportConfig,
     selectionConfig,
     responsiveConfig,
+    headerConfig,
     layoutConfig,
     advancedFilters = [],
     enableAdvancedFilters = false,
@@ -235,7 +259,7 @@ export function DataTable<T extends { id: number | string }>({
     const [search, setSearch] = useState('');
     const [orderBy, setOrderBy] = useState<string>(defaultOrderBy);
     const [orderDir, setOrderDir] = useState<'asc' | 'desc'>(defaultOrderDir);
-    const [filterValues, setFilterValues] = useState<Record<string, string | number | undefined>>({});
+    const [filterValues, setFilterValues] = useState<Record<string, string | number | boolean | undefined>>({});
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
@@ -343,7 +367,13 @@ export function DataTable<T extends { id: number | string }>({
     );
 
     // Use external filterValues if provided, otherwise internal state
-    const activeFilterValues = externalFilterValues ?? filterValues;
+    // If externalFilterValues is provided, it's controlled mode
+    // Otherwise use internal filterValues state
+    const activeFilterValues = useMemo(() => {
+        const values = externalFilterValues !== undefined ? externalFilterValues : filterValues;
+        console.log('activeFilterValues updated:', values, 'from', externalFilterValues !== undefined ? 'external' : 'internal');
+        return values;
+    }, [externalFilterValues, filterValues]);
 
     // Save column preferences to localStorage
     const saveColumnPreferences = useCallback(() => {
@@ -588,6 +618,7 @@ export function DataTable<T extends { id: number | string }>({
     );
 
     const fetchTableData = useCallback(async () => {
+        console.log('Fetching data with filters:', activeFilterValues);
         setLoading(true);
         setError(null);
         try {
@@ -633,8 +664,25 @@ export function DataTable<T extends { id: number | string }>({
         setPage(1);
     };
 
-    const handleFilterChange = (key: string, value: string | number) => {
-        setFilterValues((prev) => ({ ...prev, [key]: value }));
+    const handleFilterChange = (key: string, value: string | number | boolean | undefined) => {
+        console.log('Filter changed:', key, value);
+        
+        // If using controlled mode (externalFilterValues provided), warn user
+        if (externalFilterValues !== undefined) {
+            console.warn(
+                '⚠️ DataTable is in CONTROLLED mode (filterValues prop provided).\n' +
+                'Filter changes will NOT trigger fetch unless you update the filterValues prop.\n' +
+                'Either:\n' +
+                '1. Remove filterValues prop to use UNCONTROLLED mode (recommended), or\n' +
+                '2. Handle filter changes and update filterValues prop yourself.'
+            );
+        }
+        
+        setFilterValues((prev) => {
+            const newFilters = { ...prev, [key]: value };
+            console.log('New filter values (internal):', newFilters);
+            return newFilters;
+        });
         setPage(1);
     };
 
@@ -721,39 +769,15 @@ export function DataTable<T extends { id: number | string }>({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     {/* Filters Section */}
                     <div className="flex flex-wrap gap-2">
-                        {filters.length > 0 && (
-                            <>
-                                {filters.map((filter) =>
-                                    filter.customElement ? (
-                                        <div key={filter.key}>{filter.customElement}</div>
-                                    ) : (
-                                        <Select
-                                            key={filter.key}
-                                            value={String(filterValues[filter.key] ?? '')}
-                                            onValueChange={(value) => handleFilterChange(filter.key, value)}
-                                        >
-                                            <SelectTrigger
-                                                className={classNames(
-                                                    'w-40 min-w-0',
-                                                    responsiveSettings.compactMode && isMobileView && 'h-8 w-32 text-xs',
-                                                    layoutSettings.compactButtons && 'h-8',
-                                                )}
-                                                size={responsiveSettings.compactMode && isMobileView ? 'sm' : 'default'}
-                                            >
-                                                <SelectValue placeholder={filter.label} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="">{filter.label}</SelectItem>
-                                                {filter.options?.map((opt) => (
-                                                    <SelectItem key={opt.value} value={String(opt.value)}>
-                                                        {opt.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ),
-                                )}
-                            </>
+                        {filters.length > 0 && filters.map((filter) => 
+                            React.createElement(DataTableFilterInput, {
+                                key: filter.key,
+                                filter: filter,
+                                value: filterValues[filter.key],
+                                onChange: (value: string | number | boolean | undefined) => handleFilterChange(filter.key, value),
+                                compactMode: responsiveSettings.compactMode,
+                                isMobileView: isMobileView,
+                            })
                         )}
                     </div>
 
@@ -1124,7 +1148,7 @@ export function DataTable<T extends { id: number | string }>({
                 </div>
             )}
 
-            <div className={classNames('relative', responsiveSettings.enableResponsive && isMobileView && 'overflow-x-auto')}>
+            <div className={classNames('overflow-hidden rounded-md border', responsiveSettings.enableResponsive && isMobileView && 'overflow-x-auto')}>
                 <Table
                     className={classNames(
                         'w-full',
@@ -1132,25 +1156,35 @@ export function DataTable<T extends { id: number | string }>({
                         responsiveSettings.mobileStackedView && isMobileView && 'block md:table',
                     )}
                 >
-                    <TableHeader className={responsiveSettings.mobileStackedView && isMobileView ? 'hidden' : ''}>
+                    {(headerConfig?.showHeader !== false) && (
+                        <TableHeader 
+                            className={classNames(
+                                responsiveSettings.mobileStackedView && isMobileView && 'hidden',
+                                headerConfig?.stickyHeader && 'sticky top-0 z-10 bg-background',
+                                headerConfig?.headerClassName
+                            )}
+                            style={headerConfig?.headerHeight ? { height: typeof headerConfig.headerHeight === 'number' ? `${headerConfig.headerHeight}px` : headerConfig.headerHeight } : undefined}
+                        >
                         <TableRow>
                             {selectionSettings.enableRowSelection && (
-                                <TableCell className={getResponsiveClasses(DATATABLE_CONSTANTS.CHECKBOX_WIDTH, responsiveSettings.compactMode, isMobileView)}>
+                                <TableHead className={getResponsiveClasses(DATATABLE_CONSTANTS.CHECKBOX_WIDTH, responsiveSettings.compactMode, isMobileView)}>
                                     {selectionSettings.selectionMode === 'multiple' && (
                                         <Checkbox checked={isAllSelected} onCheckedChange={handleSelectAll} aria-label="Select all rows" />
                                     )}
-                                </TableCell>
+                                </TableHead>
                             )}
                             {responsiveColumns.map((col) => (
-                                <TableCell
+                                <TableHead
                                     key={col.key as string}
                                     className={classNames(
                                         col.sortable ? 'cursor-pointer select-none' : '',
-                                        col.width ? col.width : '',
                                         enableColumnReordering ? 'group relative' : '',
                                         draggedColumn === col.key && 'opacity-50',
                                         dragOverColumn === col.key && 'bg-blue-50 border-l-2 border-blue-500',
+                                        getAlignmentClass(col.align),
+                                        col.headerClassName
                                     )}
+                                    style={getColumnStyle(col)}
                                     role={col.sortable ? 'button' : undefined}
                                     tabIndex={col.sortable ? 0 : undefined}
                                     onClick={() => col.sortable && handleSort(col.key as string)}
@@ -1219,11 +1253,12 @@ export function DataTable<T extends { id: number | string }>({
                                             />
                                         )}
                                     </div>
-                                </TableCell>
+                                </TableHead>
                             ))}
-                            {actions && <TableCell>Aksi</TableCell>}
+                            {actions && <TableHead className="font-semibold px-2 py-2">Aksi</TableHead>}
                         </TableRow>
-                    </TableHeader>
+                        </TableHeader>
+                    )}
                     <TableBody>
                         {loading ? (
                             <TableRow>
@@ -1268,7 +1303,10 @@ export function DataTable<T extends { id: number | string }>({
                                             className={classNames(
                                                 getResponsiveClasses('', responsiveSettings.compactMode, isMobileView),
                                                 responsiveSettings.mobileStackedView && isMobileView && 'block md:table-cell',
+                                                getAlignmentClass(col.align),
+                                                col.cellClassName
                                             )}
+                                            style={getColumnStyle(col)}
                                         >
                                             {responsiveSettings.mobileStackedView && isMobileView && (
                                                 <span className="text-muted-foreground mr-2 font-medium md:hidden">

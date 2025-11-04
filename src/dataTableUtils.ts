@@ -2,11 +2,50 @@
  * Utility functions for DataTable component
  */
 
+import React from 'react';
+
 /**
  * Combines multiple class names, filtering out falsy values
  */
 export function classNames(...classes: (string | boolean | undefined)[]): string {
     return classes.filter(Boolean).join(' ');
+}
+
+/**
+ * Convert width value to CSS string
+ * Accepts: '200px', '20%', 200 (converts to '200px')
+ */
+export function getCSSWidth(width?: string | number): string | undefined {
+    if (!width) return undefined;
+    if (typeof width === 'number') return `${width}px`;
+    return width;
+}
+
+/**
+ * Get column style object with width, minWidth, maxWidth
+ */
+export function getColumnStyle(column: {
+    width?: string | number;
+    minWidth?: string | number;
+    maxWidth?: string | number;
+}): React.CSSProperties {
+    const style: React.CSSProperties = {};
+    
+    if (column.width) style.width = getCSSWidth(column.width);
+    if (column.minWidth) style.minWidth = getCSSWidth(column.minWidth);
+    if (column.maxWidth) style.maxWidth = getCSSWidth(column.maxWidth);
+    
+    return style;
+}
+
+/**
+ * Get text alignment class
+ */
+export function getAlignmentClass(align?: 'left' | 'center' | 'right'): string {
+    if (!align || align === 'left') return 'text-left';
+    if (align === 'center') return 'text-center';
+    if (align === 'right') return 'text-right';
+    return 'text-left';
 }
 
 /**
